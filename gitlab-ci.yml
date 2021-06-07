@@ -1,0 +1,70 @@
+# This file is a template, and might need editing before it works on your project.
+image: openshift/origin-cli
+
+stages:
+  - build  # dummy stage to follow the template guidelines
+  - deploy  # dummy stage to follow the template guidelines
+  - housekeeping
+  - staging
+  - cleanup
+
+variables:
+  OPENSHIFT_SERVER: URL:32055
+  OPENSHIFT_DOMAIN: DOMAIN_NAME
+  CI_PROJECT_NAME: PROJECT_NAME
+  APP: APP_NAME
+  OPENSHIFT_TOKEN: TOKEN
+
+.housekeeping: &housekeeping
+  before_script:
+    - oc login "$OPENSHIFT_SERVER" --token="$OPENSHIFT_TOKEN" --insecure-skip-tls-verify
+    - oc project "$CI_PROJECT_NAME"
+  script:
+    - oc get services  $APP 2> /dev/null && oc delete service "$APP"
+    - oc get routes $APP 2> /dev/null && oc delete route "$APP"
+    - oc get bc  $APP 2> /dev/null && oc delete bc "$APP"
+    - oc get is  $APP 2> /dev/null && oc delete is "$APP"
+    - oc get deployment  $APP 2> /dev/null && oc delete deployment "$APP"
+    - "oc get replicasets | grep '$APP' | awk '{ print $1 }' | xargs oc delete replicaset"
+
+
+
+.deploy: &deploy
+  before_script:
+    - oc login "$OPENSHIFT_SERVER" --token="$OPENSHIFT_TOKEN" --insecure-skip-tls-verify
+    - oc project "$CI_PROJECT_NAME"
+  script:
+    - "oc new-app . --name=$APP --strategy=docker"
+    - "oc start-build $APP --from-dir=. --follow"
+    - "oc get routes $APP 2> /dev/null || oc expose service $APP --hostname=$APP_HOST"
+
+.cleanup: &cleanup
+  before_script:
+    - oc login "$OPENSHIFT_SERVER" --token="$OPENSHIFT_TOKEN" --insecure-skip-tls-verify
+    - oc project "$CI_PROJECT_NAME"
+  script:
+    - "oc get pod | grep build | awk '{ print $1 }' | xargs oc delete pod"
+
+housekeeping:
+  <<: *housekeeping
+  stage: housekeeping
+  allow_failure: true
+  only:
+    - develop
+
+staging:
+  <<: *deploy
+  stage: staging
+  variables:
+    APP_HOST: $APP-$CI_PROJECT_NAME-$APP_NAME.$OPENSHIFT_DOMAIN
+  environment:
+    name: staging
+    url: http://$APP-$CI_PROJECT_NAME-$APP_NAME.$OPENSHIFT_DOMAIN
+  only:
+    - develop
+
+cleanup:
+  <<: *cleanup
+  stage: cleanup
+  only:
+    - develop

@@ -8,4 +8,5 @@ The pipeline consists of three steps:
 3. Cleanup (destroys the build pods)
 
 The pipeline should trigger only for develop branch and it should be placed accordingly on the root structure of this branch.
+
 The build strategy is set to be docker as a result a Dockerfile should exist along with the .yml file on the root directory with the instructions for the building. An example Dockerfle is placed on the repository for reference.
